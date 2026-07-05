@@ -1,28 +1,95 @@
 from dataclasses import dataclass, field
 from collections import deque
 
+
 @dataclass
 class Flow:
+    flow_id: int
 
-    flow_id: str
+    # 양방향 Endpoint
+    endpoint1_ip: str
+    endpoint1_port: int
 
-    src_ip: str
-    dst_ip: str
-
-    src_port: int
-    dst_port: int
+    endpoint2_ip: str
+    endpoint2_port: int
 
     protocol: str
 
+    # 시간
     start_time: float
     last_seen: float
 
+    # 전체 통계
     packet_count: int = 0
     byte_count: int = 0
 
+    # 방향별 통계
+    forward_packet_count: int = 0
+    backward_packet_count: int = 0
+
+    forward_byte_count: int = 0
+    backward_byte_count: int = 0
+
+    # TCP Flag 통계
     syn_count: int = 0
     ack_count: int = 0
     fin_count: int = 0
     rst_count: int = 0
 
+    # 최근 패킷
     recent_packets: deque = field(default_factory=lambda: deque(maxlen=30))
+
+    # ---------- 계산 속성 ----------
+
+    @property
+    def duration(self) -> float:
+        """Flow가 유지된 시간(초)"""
+        return max(self.last_seen - self.start_time, 0)
+
+    @property
+    def pps(self) -> float:
+        """Packets Per Second"""
+        if self.duration == 0:
+            return float(self.packet_count)
+
+        return self.packet_count / self.duration
+
+    @property
+    def bps(self) -> float:
+        """Bytes Per Second"""
+        if self.duration == 0:
+            return float(self.byte_count)
+
+        return self.byte_count / self.duration
+
+    @property
+    def avg_packet_size(self) -> float:
+        """평균 패킷 크기(Byte)"""
+        if self.packet_count == 0:
+            return 0
+
+        return self.byte_count / self.packet_count
+
+    @property
+    def forward_ratio(self) -> float:
+        """정방향 패킷 비율"""
+        if self.packet_count == 0:
+            return 0
+
+        return self.forward_packet_count / self.packet_count
+
+    @property
+    def backward_ratio(self) -> float:
+        """역방향 패킷 비율"""
+        if self.packet_count == 0:
+            return 0
+
+        return self.backward_packet_count / self.packet_count
+
+    @property
+    def is_one_way(self) -> bool:
+        """한쪽 방향으로만 통신하는 Flow인지"""
+        return (
+            self.forward_packet_count == 0
+            or self.backward_packet_count == 0
+        )

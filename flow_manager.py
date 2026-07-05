@@ -6,39 +6,52 @@ class FlowManager:
 
     def __init__(self):
         self.flows = {}
+        self.next_flow_id = 1
 
     def make_flow_key(self, packet):
+
+        endpoint1 = (packet.src_ip, packet.src_port)
+        endpoint2 = (packet.dst_ip, packet.dst_port)
+
+        endpoint1, endpoint2 = sorted([endpoint1, endpoint2])
+
         return (
-            packet.src_ip,
-            packet.dst_ip,
-            packet.src_port,
-            packet.dst_port,
+            endpoint1,
+            endpoint2,
             packet.protocol
         )
 
     def update(self, packet):
 
         key = self.make_flow_key(packet)
+
         flow = self.flows.get(key)
 
         if flow is None:
 
+            endpoint1, endpoint2, protocol = key
+
             flow = Flow(
-                flow_id=str(len(self.flows) + 1),
+                flow_id=self.next_flow_id,
 
-                src_ip=packet.src_ip,
-                dst_ip=packet.dst_ip,
+                endpoint1_ip=endpoint1[0],
+                endpoint1_port=endpoint1[1],
 
-                src_port=packet.src_port,
-                dst_port=packet.dst_port,
+                endpoint2_ip=endpoint2[0],
+                endpoint2_port=endpoint2[1],
 
-                protocol=packet.protocol,
+                protocol=protocol,
 
                 start_time=packet.timestamp,
                 last_seen=packet.timestamp
             )
 
             self.flows[key] = flow
+            self.next_flow_id += 1
+
+        # ----------------------------
+        # Flow 정보 갱신
+        # ----------------------------
 
         flow.last_seen = packet.timestamp
 
@@ -47,6 +60,21 @@ class FlowManager:
 
         flow.recent_packets.append(packet)
 
+        # 방향 판별
+        if (
+            packet.src_ip == flow.endpoint1_ip
+            and packet.src_port == flow.endpoint1_port
+        ):
+
+            flow.forward_packet_count += 1
+            flow.forward_byte_count += packet.packet_size
+
+        else:
+
+            flow.backward_packet_count += 1
+            flow.backward_byte_count += packet.packet_size
+
+        # TCP Flag 통계
         if packet.protocol == "TCP":
 
             flags = packet.tcp_flags or ""
