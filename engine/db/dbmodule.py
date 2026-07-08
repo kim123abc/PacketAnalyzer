@@ -1,4 +1,5 @@
 import sqlite3
+import time
 
 class DBModule:
     def __init__(self):
@@ -6,6 +7,7 @@ class DBModule:
         self.cursor = self.conn.cursor()
         self.create_table()
         self.packet_buffer = []
+        self.last_packet_flush = time.time()
 
     def create_table(self):
         # 들어오는 패킷 전부 저장하는 테이블
@@ -50,12 +52,16 @@ class DBModule:
 
 
     def insert_packet_table(self, timestamp, src_ip, dst_ip, src_port, dst_port, protocol, packet_size, payload_size, tcp_flags):
+        '''
+        패킷 정보를 쌓아두었다가 100개 혹은 1초마다 한번에 DB에 저장
+        '''
         # print("DB모듈 들어옴")
         self.packet_buffer.append(
             (timestamp, src_ip, dst_ip, src_port, dst_port, protocol, packet_size, payload_size, tcp_flags)
         )
 
-        if len(self.packet_buffer) >= 100:  # 버퍼가 100개 이상이면 한 번에 커밋
+        now = time.time()
+        if (len(self.packet_buffer) >= 100 or now - self.last_packet_flush >= 1):  # 버퍼가 100개 이상이거나 마지막 커밋으로부터 1초 이상 지났다면 한 번에 커밋
             self.cursor.executemany('''
                 INSERT INTO packets (timestamp, src_ip, dst_ip, src_port, dst_port, protocol, packet_size, payload_size, tcp_flags)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -63,6 +69,7 @@ class DBModule:
             self.conn.commit()
             self.packet_buffer.clear()
             self.cleanup_packets()
+            self.last_packet_flush = time.time()
             # print("100개의 패킷이 DB에 저장되었습니다.")
   
 

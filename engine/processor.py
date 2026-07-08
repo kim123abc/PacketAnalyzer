@@ -5,7 +5,11 @@ from .packet_data import PacketData
 from .flow_manager import FlowManager
 
 from .detector_loader import load_detectors
+from .warning_manager import WarningManager
 from .db.dbmodule import DBModule
+
+import time
+
 
 
 class PacketProcessor:
@@ -14,6 +18,7 @@ class PacketProcessor:
         self.packet_queue = packet_queue
         self.flow_manager = FlowManager()
         self.detectors = load_detectors()
+        self.warning_manager = WarningManager()
 
     def process_packet(self, packet):
 
@@ -66,6 +71,8 @@ class PacketProcessor:
 
     def run(self):
         self.db_module = DBModule()
+        warning_manager = self.warning_manager
+        last_flush = time.time()
         while True:
             raw_packet = self.packet_queue.get()
             packet = self.process_packet(raw_packet)
@@ -81,6 +88,17 @@ class PacketProcessor:
             
 
             for detect in self.detectors:
-                detect(context.packet, context.flow)
+                result, name = detect(context.packet, context.flow)
+
+                if result:
+                    warning_manager.add_warning(
+                        packet.timestamp,
+                        packet.src_ip,
+                        name
+                    )
+
+                if time.time() - last_flush >= 5:
+                    warning_manager.flush(self.db_module)
+                    last_flush = time.time()
 
             
