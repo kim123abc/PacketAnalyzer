@@ -9,9 +9,9 @@ def detect(packet: PacketData, flow: Flow):
 
     if flow.protocol != "TCP":
         return
-    if flow.duration < 1:
+    if flow.duration < 2:
         return
-    if flow.pps < 1000:
+    if flow.pps < 300:
         return
     if flow.packet_count == 0:
         return
