@@ -4,9 +4,11 @@ from engine.packet_context import PacketContext
 
 class FlowManager:
 
-    def __init__(self):
+    def __init__(self, flow_timeout=60, recent_window=10.0):
         self.flows = {}
         self.next_flow_id = 1
+        self.flow_timeout = flow_timeout
+        self.recent_window = recent_window
 
     def make_flow_key(self, packet):
 
@@ -55,10 +57,10 @@ class FlowManager:
 
         flow.recent_packets.append(packet)
 
-        # 최근 1초보다 오래된 패킷 제거
+        # window(기본 10초)보다 오래된 패킷 제거
         while (
             flow.recent_packets
-            and packet.timestamp - flow.recent_packets[0].timestamp > 1.0
+            and packet.timestamp - flow.recent_packets[0].timestamp > self.recent_window
         ):
             flow.recent_packets.popleft()
 
