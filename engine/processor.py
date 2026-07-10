@@ -94,7 +94,12 @@ class PacketProcessor:
             
 
             for detect in self.detectors:
-                result, name = detect(context.packet, context.flow)
+                raw_result = detect(context.packet, context.flow)
+
+                if raw_result is None:
+                    result, name = False, "Unknown"
+                else:
+                    result, name = raw_result
 
                 if result:
                     warning_manager.add_warning(
