@@ -39,3 +39,34 @@ def get_ip_list_from_db(db_path: str = DB_PATH, limit: int | None = None) -> lis
 #     finally:
 #         conn.close()
 
+def get_ip_list_from_db(db_path: str = DB_PATH, limit: int | None = None) -> list[str]:
+    """블랙리스트 list로 변환
+
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        query = f"SELECT 'ip' FROM black_list"
+        if limit:
+            query += f" LIMIT {limit}"
+        cur.execute(query)
+        rows = cur.fetchall()
+        return [row[0] for row in rows]
+    finally:
+        conn.close()
+
+def get_ip_list_from_db(db_path: str = DB_PATH, limit: int | None = None) -> list[str]:
+    """화이트리스트 list로 변환
+
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        query = f"SELECT 'ip' FROM white_list"
+        if limit:
+            query += f" LIMIT {limit}"
+        cur.execute(query)
+        rows = cur.fetchall()
+        return [row[0] for row in rows]
+    finally:
+        conn.close()
