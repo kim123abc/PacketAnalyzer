@@ -4,24 +4,33 @@ import os
 
 
 def detect(packet: PacketData, flow: Flow):
+    # 엔진이 패킷을 읽어 들일 때마다 터미널에 실시간 수집 상태를 출력합니다.
     print("실행중")
+    
+    # 세션 하이재킹은 TCP 프로토콜의 취약점을 노리므로 TCP가 아닌 패킷은 즉시 걸러냅니다.
     if flow.protocol != "TCP":
         return False, None
 
+    # 패킷 유실 및 초기 트래픽 변동으로 인한 오탐을 방지하기 위해 최소 50개 이상 쌓였을 때만 분석을 시작합니다.
     if flow.packet_count < 50:
         return False, None
 
+    # 전체 플로우 패킷 중 인증 데이터 및 응답에 사용되는 ACK 패킷의 비율을 계산합니다.
     ack_ratio = flow.ack_count / flow.packet_count
+    
+    # 전체 플로우 패킷 중 세션 강제 종료에 사용되는 RST 패킷의 비율을 계산합니다.
     rst_ratio = flow.rst_count / flow.packet_count
 
+    # [🔥 핵심 탐지 논리] 세션 하이재킹 성공 시 발생하는 특이 네트워크 징후들을 정밀 저격합니다.
     if (
-        flow.pps >= 50
-        and ack_ratio >= 0.75
-        and rst_ratio >= 0.10
-        and flow.backward_ratio >= 0.30
-        and flow.syn_count <= 2
+        flow.pps >= 50               # 1초당 유입되는 패킷 속도가 50개 이상으로 급증했고 (공격 폭주)
+        and ack_ratio >= 0.75        # 세션 번호가 꼬여 서로 패킷을 재전송하는 'TCP ACK Storm' 현상으로 ACK가 75% 이상이며
+        and rst_ratio >= 0.10        # 평소에 0%여야 할 연결 파괴 목적의 RST 패킷이 10% 이상 관측되고
+        and flow.backward_ratio >= 0.30  # 서버가 공격자나 유저에게 대응하여 보내는 응답 비율이 30% 이상이면서
+        and flow.syn_count <= 2      # 새로운 세션을 수립하는 연결 요청(SYN)은 거의 없는 유기적 하이재킹 상태일 때
     ):
 
+        # 📊 보안 관리자(방어자) 화면에 팝업시킬 침입 탐지 대시보드를 시각적으로 출력합니다.
         print("\n" + "=" * 60)
         print("⚠️ TCP SESSION HIJACKING DETECTED ⚠️")
         print("=" * 60)
@@ -50,7 +59,9 @@ def detect(packet: PacketData, flow: Flow):
 
         print("=" * 60)
 
+        # [🔒 실시간 능동 방어] 공격이 확정되는 즉시 서버가 스스로 소켓을 파괴하는 메커니즘입니다.
         try:
+            # 리눅스 시스템 명령어를 호출하여 현재 탈취당한 상태인 해당 출발지/목적지 소켓 자체를 강제로 파괴(Kill)합니다.
             os.system(
                 f"sudo ss -K "
                 f"src {packet.src_ip} "
@@ -59,11 +70,15 @@ def detect(packet: PacketData, flow: Flow):
                 f"dport = {packet.dst_port}"
             )
 
+            # 소켓 파괴 명령이 커널에 성공적으로 하달되었음을 알립니다. 공격자 터미널 연결이 즉시 끊어집니다.
             print("TCP Connection Closed")
 
         except Exception as e:
+            # 시스템 권한 문제나 소켓이 이미 끊어진 경우 예외 처리 에러를 출력합니다.
             print("Connection Close Failed :", e)
 
+        # 상위 분석 프레임워크 엔진에게 탐지 성공 여부와 공격 유형을 객체로 반환합니다.
         return (True, "TCP Session Hijacking")
 
+    # 공격 임계치를 만족하지 않는 정상적이고 평범한 트래픽 흐름은 안전하게 통과시킵니다.
     return False, None
